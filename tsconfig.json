@@ -11,7 +11,7 @@
     /* Advanced Options */
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "experimentalDecorators": true,
+    "declaration": true,
     "types": [
       "node"
     ],
@@ -23,5 +23,5 @@
     "watchFile": "useFsEvents",
     "watchDirectory": "useFsEvents",
     "fallbackPolling": "dynamicPriority"
-  },
+  }
 }

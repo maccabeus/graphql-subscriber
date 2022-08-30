@@ -1,3 +1,4 @@
+
 declare module "graphql-subscriber" {
 
     export class SubscriptionManager {
