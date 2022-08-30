@@ -1,5 +1,5 @@
 {
-  "name": "graphql-subscription",
+  "name": "graphql-subscription-manager",
   "version": "1.0.0",
   "description": "A simple graphql subscription client",
   "main": "build/index.js",
