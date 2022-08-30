@@ -3,12 +3,15 @@
 # dependencies
 node_modules/**/*
 
+package.json
+
 # testing
 /coverage
 
 # production
 /build
 /dist
+/__test__
 
 # misc
 # .env

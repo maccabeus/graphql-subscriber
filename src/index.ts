@@ -1,4 +1,3 @@
-
 import WebSocket from "ws";
 import crypto from "crypto";
 import log from "./logger";
@@ -30,13 +29,13 @@ export interface OperationMessage {
     type: GQLMessageConstant
     payload?: Record<string, unknown>;
 }
-interface SubscribeOperation {
+export interface SubscribeOperation {
     type: GQLMessageConstant;
     id?: string;
     payload?: SubscribePayload;
 }
 
-interface SubscriberCallback { (data: any): any }
+export interface SubscriberCallback { (data: any): any }
 
 export interface SubscribePayload {
     query: string;
@@ -50,12 +49,12 @@ export interface SubscribeClientData {
     variables?: Record<string, unknown> | null;
     extensions?: Record<string, unknown> | null;
 }
-interface SubscribeServerData {
+export interface SubscribeServerData {
     id: string;
     type: GQLMessageConstant;
     payload: any;
 }
-interface SubscriptionQueue {
+export interface SubscriptionQueue {
     options: SubscribeClientData;
     callBack: SubscriberCallback
 }
@@ -87,7 +86,7 @@ export class SubscriptionManager {
         this.connection = this.createConnection(wsUrl, wsPort, keepAlive, keepAliveInterval);
     }
 
-    public subscribe(options: SubscribeClientData, callBack: SubscriberCallback) {
+    public subscribe(options: SubscribeClientData, callBack: SubscriberCallback): boolean {
 
         if (!this.connection) {
             /** attempt to reestablish the connection */
@@ -95,7 +94,8 @@ export class SubscriptionManager {
         }
 
         if (this.connection.readyState !== ConnectionReadyState.OPEN || !this.connectionAck) {
-            return this.retrySubscription(options, callBack);
+            this.retrySubscription(options, callBack);
+            return false;
         }
 
         const { variables, query, extensions } = options;
@@ -125,6 +125,7 @@ export class SubscriptionManager {
             this.serverSubscriptions.add(subscriptionId);
             // console.log("subs: ", Array.from(this.serverSubscriptions.values()));
         }
+        return true;
     }
 
     public close() {
