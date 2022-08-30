@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "outDir": "build",
+    "rootDir": "src",
+    "baseUrl": "src",
+    /* Strict Type-Checking Options */
+    "strict": true,
+    "esModuleInterop": true,
+    /* Advanced Options */
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "es6"
+    ]
+  },
+  "watchOptions": {
+    "watchFile": "useFsEvents",
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicPriority"
+  },
+}
