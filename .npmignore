@@ -8,9 +8,7 @@ package.json
 # testing
 /coverage
 
-/__test__
-
-src/*/**
+/src
 
 # macOS
 .DS_Store

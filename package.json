@@ -1,6 +1,6 @@
 {
   "name": "graphql-subscription-manager",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple graphql subscription client",
   "main": "build/index.js",
   "types": "./build/index.d.ts",
@@ -14,7 +14,8 @@
   "scripts": {
     "test": "jest --config jestconfig.json",
     "nodemon": "nodemon ./build/test.js && npx tsc --watch",
-    "tsc": "npx tsc --watch"
+    "tsc": "npx tsc --watch",
+    "build": "npx tsc"
   },
   "keywords": [
     "graphql",
