@@ -1,4 +1,4 @@
-import WebSocket from "ws";
+import { client as WebSocket } from "websocket";
 import crypto from "crypto";
 import log from "./logger";
 import { ILogger, LogSeverity, LogTypes } from "./logger.types";
@@ -28,6 +28,10 @@ export enum ConnectionReadyState {
 export interface OperationMessage {
     type: GQLMessageConstant
     payload?: Record<string, unknown>;
+}
+export interface ServerMessageResponse {
+    type: string;
+    [propName: string]: string;
 }
 export interface SubscribeOperation {
     type: GQLMessageConstant;
@@ -61,7 +65,7 @@ export interface SubscriptionQueue {
 
 export class SubscriptionManager {
 
-    private connection: WebSocket;
+    private connection: any;
     private subscriber: Map<string, Array<SubscriberCallback>> = new Map();
     private subscriberCount: number = 0;
     private connectionAck: boolean = false;
@@ -83,24 +87,23 @@ export class SubscriptionManager {
         this.keepAlive = keepAlive;
         this.keepAliveInterval = keepAliveInterval;
         this.log = logger ?? log;
-        this.connection = this.createConnection(wsUrl, wsPort, keepAlive, keepAliveInterval);
+        this.createConnection(wsUrl, wsPort, keepAlive, keepAliveInterval);
     }
 
     public subscribe(options: SubscribeClientData, callBack: SubscriberCallback): boolean {
 
-        if (!this.connection) {
-            /** attempt to reestablish the connection */
-            this.connection = this.createConnection(this.url, this.port, this.keepAlive, this.keepAliveInterval);
-        }
+        // if (!this.connection) {
+        //     /** attempt to reestablish the connection */
+        //     this.connection = this.createConnection(this.url, this.port, this.keepAlive, this.keepAliveInterval);
+        // }
 
-        if (this.connection.readyState !== ConnectionReadyState.OPEN || !this.connectionAck) {
+        if (!this.connection || !this.connection.connected || !this.connectionAck) {
             this.retrySubscription(options, callBack);
             return false;
         }
 
         const { variables, query, extensions } = options;
         /** strip all spaces from query expression  before using for ID generation */
-        // const subscriptionId = this.hashString(`${operationName}${query.replace(/\s/ig, "")}`);
         const subscriptionId = this.generateSubscriptionId(options);
         /**
          * Check if we are already connected to this subscription on the server
@@ -120,9 +123,10 @@ export class SubscriptionManager {
                     query, variables, extensions
                 }
             }
-            this.connection.send(this.stringify(subscriptionData));
             /** add the  subscription to the server subscription list  */
             this.serverSubscriptions.add(subscriptionId);
+            /** Connect to server  */
+            this.connection.send(this.stringify(subscriptionData));
             // console.log("subs: ", Array.from(this.serverSubscriptions.values()));
         }
         return true;
@@ -132,12 +136,13 @@ export class SubscriptionManager {
         this.terminateConnection()
     }
 
-    private processMessage(data: any): void {
-
+    private processMessage(data: ServerMessageResponse, dataPrefix: string = "Data"): void {
         if (!data) { return };
-        // console.this.log(data.toString());
         try {
-            const serverMessage: any = JSON.parse(data.toString());
+            const parsedData: ServerMessageResponse = typeof data === "string" ? JSON.parse(`${data}`) : data;
+            const serverMessage: any = parsedData[`${parsedData.type}${dataPrefix}`] ?
+                JSON.parse(parsedData[`${parsedData.type}${dataPrefix}`]) :
+                null;
             /**
              * begin processing the server response based on any of the following 
              */
@@ -167,7 +172,6 @@ export class SubscriptionManager {
 
     private processNextSubscription(data: SubscribeServerData | null): void {
         if (!data) return;
-        console.log("here");
         this.notifySubscribers(data);
     }
     private processCompletedSubscription(data: SubscribeServerData | null): void {
@@ -199,26 +203,47 @@ export class SubscriptionManager {
     private createConnection(wsUrl: string, wsPort: number | null, keepAlive: boolean, keepAliveInterval: number): WebSocket {
 
         const wsFullUrlAndPort = wsPort ? `${wsUrl}:${wsPort}` : wsUrl;
-        const connection = new WebSocket(wsFullUrlAndPort, this.wsGraphQlKey);
+        const client = new WebSocket();
         /**
          * Start processing the socket listeners 
          */
-        connection.on("open", (data: any) => {
+        client.on("connect", (connection: any) => {
+            if (!connection) {
+                /** @todo attempt to reconnect*/
+                return;
+            }
             connection.send(
                 this.stringify({ type: GQLMessageConstant.CONNECTION_INIT, payload: {} })
             )
-            this.processConnectionOpen(data);
+            this.processConnectionOpen(null);
+            /**
+             * Add event listener for connection
+             */
+            connection.on("message", (data: any) => {
+                this.processMessage(data);
+            });
+            connection.on("error", (data: any) => {
+                this.processConnectionError(data);
+            });
+            connection.on("close", (data: any) => {
+                this.processConnectionClose(data);
+            });
+            /** set connection class property */
+            this.connection = connection;
         });
         /**
-         * Process connection message
+         * Process websocket connection issues and events 
          */
-        connection.on("message", (data: any) => {
-            this.processMessage(data);
-        });
-        connection.on("error", (data: any) => {
-            this.processConnectionError(data);
-        });
-        return connection;
+        // client.on("httpResponse", (data: any) => {
+        //     this.processMessage(data);
+        // });
+        // client.on("connectFailed", (data: any) => {
+        //     this.processConnectionError(data);
+        // });
+
+        /** Do the actual client connection */
+        client.connect(wsFullUrlAndPort, this.wsGraphQlKey);
+        return this.connection;
     }
 
     private keepConnectionAlive(interval: number = this.keepAliveInterval) {
@@ -227,7 +252,7 @@ export class SubscriptionManager {
             const data: SubscribeOperation = {
                 type: GQLMessageConstant.CONNECTION_KEEP_ALIVE,
             }
-            this.connection.send(this.stringify(data));
+            // this.connection.send(this.stringify(data));
         }, interval);
     }
 
@@ -237,7 +262,7 @@ export class SubscriptionManager {
         /** if retry not currently running, attempt to run subscription retries */
         if (!this.retryIndex) {
             this.retryIndex = setInterval(() => {
-                if (this.connection.readyState === ConnectionReadyState.OPEN && this.connectionAck) {
+                if (this.connection.connected && this.connectionAck) {
                     this.queuedSubscriptions.forEach((subscription, key: string) => {
                         const { options, callBack } = subscription;
                         this.subscribe(options, callBack);
@@ -269,6 +294,10 @@ export class SubscriptionManager {
     private processConnectionError(data: any) {
         const message = "Error occurs during socket connection";
         this.log(LogSeverity.EMERGENCY, LogTypes.SYSTEM, message, data);
+    }
+    private processConnectionClose(data: any) {
+        const message = "Socket connection closed";
+        this.log(LogSeverity.INFO, LogTypes.SYSTEM, message, data);
     }
 
     private stringify(messageValue: any): string {
