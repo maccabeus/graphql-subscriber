@@ -1,6 +1,6 @@
 {
   "name": "graphql-subscription-manager",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A simple graphql subscription client",
   "main": "build/run.js",
   "types": "./build/index.d.ts",
