@@ -134,7 +134,6 @@ export class SubscriptionManager {
         if (!data) { return };
         try {
             const serverMessage: any = JSON.parse(data.toString());
-            console.log("server data: ", serverMessage);
             /**
              * begin processing the server response based on any of the following 
              */
