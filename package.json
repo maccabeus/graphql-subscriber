@@ -25,7 +25,6 @@
   "author": "Anthony Adeniyi",
   "license": "MIT",
   "dependencies": {
-    "faye-websocket": "^0.11.4",
     "websocket": "^1.0.34"
   },
   "devDependencies": {
