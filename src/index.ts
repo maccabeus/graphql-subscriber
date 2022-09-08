@@ -1,5 +1,4 @@
-import { client as WebSocket } from "websocket";
-import crypto from "crypto";
+import { w3cwebsocket as WebSocket } from "websocket";
 import log from "./logger";
 import { ILogger, LogSeverity, LogTypes } from "./logger.types";
 
@@ -92,12 +91,7 @@ export class SubscriptionManager {
 
     public subscribe(options: SubscribeClientData, callBack: SubscriberCallback): boolean {
 
-        // if (!this.connection) {
-        //     /** attempt to reestablish the connection */
-        //     this.connection = this.createConnection(this.url, this.port, this.keepAlive, this.keepAliveInterval);
-        // }
-
-        if (!this.connection || !this.connection.connected || !this.connectionAck) {
+        if (!this.connection || this.connection.OPEN !== 1 || !this.connectionAck) {
             this.retrySubscription(options, callBack);
             return false;
         }
@@ -136,13 +130,11 @@ export class SubscriptionManager {
         this.terminateConnection()
     }
 
-    private processMessage(data: ServerMessageResponse, dataPrefix: string = "Data"): void {
+    private processMessage(data: ServerMessageResponse): void {
         if (!data) { return };
         try {
-            const parsedData: ServerMessageResponse = typeof data === "string" ? JSON.parse(`${data}`) : data;
-            const serverMessage: any = parsedData[`${parsedData.type}${dataPrefix}`] ?
-                JSON.parse(parsedData[`${parsedData.type}${dataPrefix}`]) :
-                null;
+            const serverMessage: any = JSON.parse(data.toString());
+            console.log("server data: ", serverMessage);
             /**
              * begin processing the server response based on any of the following 
              */
@@ -203,47 +195,31 @@ export class SubscriptionManager {
     private createConnection(wsUrl: string, wsPort: number | null, keepAlive: boolean, keepAliveInterval: number): WebSocket {
 
         const wsFullUrlAndPort = wsPort ? `${wsUrl}:${wsPort}` : wsUrl;
-        const client = new WebSocket();
+        const client = new WebSocket(wsFullUrlAndPort, this.wsGraphQlKey);
         /**
          * Start processing the socket listeners 
          */
-        client.on("connect", (connection: any) => {
-            if (!connection) {
+        client.onopen = () => {
+            if (!client.OPEN) {
                 /** @todo attempt to reconnect*/
                 return;
             }
-            connection.send(
-                this.stringify({ type: GQLMessageConstant.CONNECTION_INIT, payload: {} })
-            )
-            this.processConnectionOpen(null);
-            /**
-             * Add event listener for connection
-             */
-            connection.on("message", (data: any) => {
-                this.processMessage(data);
-            });
-            connection.on("error", (data: any) => {
-                this.processConnectionError(data);
-            });
-            connection.on("close", (data: any) => {
-                this.processConnectionClose(data);
-            });
-            /** set connection class property */
-            this.connection = connection;
-        });
-        /**
-         * Process websocket connection issues and events 
-         */
-        // client.on("httpResponse", (data: any) => {
-        //     this.processMessage(data);
-        // });
-        // client.on("connectFailed", (data: any) => {
-        //     this.processConnectionError(data);
-        // });
+            client.send(this.stringify({ type: GQLMessageConstant.CONNECTION_INIT, payload: {} }));
 
-        /** Do the actual client connection */
-        client.connect(wsFullUrlAndPort, this.wsGraphQlKey);
-        return this.connection;
+            client.onmessage = (response: any) => {
+                const data: any = response.data ?? null;
+                this.processMessage(data);
+            }
+            client.onerror = (response: any) => {
+                this.processConnectionError(response.data ?? null);
+            }
+            client.close = (response: any) => {
+                this.processConnectionClose(response.data ?? null);
+            }
+            this.connection = client;
+        }
+
+        return client;
     }
 
     private keepConnectionAlive(interval: number = this.keepAliveInterval) {
@@ -262,7 +238,7 @@ export class SubscriptionManager {
         /** if retry not currently running, attempt to run subscription retries */
         if (!this.retryIndex) {
             this.retryIndex = setInterval(() => {
-                if (this.connection.connected && this.connectionAck) {
+                if (this.connection && this.connection.OPEN === 1 && this.connectionAck) {
                     this.queuedSubscriptions.forEach((subscription, key: string) => {
                         const { options, callBack } = subscription;
                         this.subscribe(options, callBack);
@@ -310,7 +286,11 @@ export class SubscriptionManager {
         /** strip all spaces from query expression  before using for ID generation */
         return this.hashString(`${operationName}${query.replace(/\s/ig, "")}`);
     }
-    private hashString(value: string, mode: string = "md5", digest: any = "hex") {
-        return crypto.createHash(mode).update(value).digest(digest);
+    private hashString(value: string) {
+        /**
+         * @todo implement browser friendly hashing in the future, but for now, we will 
+         * stick with the plain returning the value 
+         */
+        return value;
     }
 }
